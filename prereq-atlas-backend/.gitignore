@@ -1,0 +1,25 @@
+# 虚拟环境与构建产物
+.venv/
+.uv-cache/
+build/
+dist/
+*.egg-info/
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# 本地配置：只提交 .env
+.env
+
+# IDE（PyCharm / IntelliJ）
+.idea/
+
+# 数据库与日志
+*.log
+*.sqlite3

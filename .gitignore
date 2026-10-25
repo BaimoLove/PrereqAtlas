@@ -1,0 +1,9 @@
+# 本仓库只收前后端源码；顶层其余文件默认全部排除（白名单式忽略）。
+# 以后要纳入新的顶层目录（例如前端），在下方追加一行 "!/目录名/" 即可。
+/*
+!/.gitignore
+!/.gitattributes
+!/prereq-atlas-backend/
+
+# 前端建成后取消注释
+# !/prereq-atlas-frontend/

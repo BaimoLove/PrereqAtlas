@@ -1,0 +1,2 @@
+# 仓库内统一 LF：混合换行会让 diff 出现无意义噪点。
+* text=auto eol=lf
