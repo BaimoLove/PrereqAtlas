@@ -1,4 +1,4 @@
-"""Alembic 运行环境：连接串来自应用配置，元数据待模型落地后接入。"""
+"""Alembic 运行环境：连接串优先取显式配置，其次应用配置；元数据来自全部实体。"""
 
 from logging.config import fileConfig
 
@@ -6,23 +6,34 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from app.infra.config import get_settings
+from app.infra.metadata import metadata as target_metadata
 
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+# 测试与回溯场景可在 Config 中显式指定 URL；命令行默认使用应用配置。
+_configured_url = (config.get_main_option("sqlalchemy.url") or "").strip()
+if not _configured_url:
+    _configured_url = get_settings().database_url
+config.set_main_option("sqlalchemy.url", _configured_url)
 
-# 尚无 ORM 模型，autogenerate 待第一个模型出现后再启用。
-target_metadata = None
+
+def _configure_context(**kwargs: object) -> None:
+    context.configure(
+        target_metadata=target_metadata,
+        compare_type=True,
+        compare_server_default=True,
+        include_schemas=False,
+        **kwargs,
+    )
 
 
 def run_migrations_offline() -> None:
     """离线模式：只生成 SQL，不建立数据库连接。"""
-    context.configure(
+    _configure_context(
         url=config.get_main_option("sqlalchemy.url"),
-        target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
@@ -40,7 +51,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        _configure_context(connection=connection)
 
         with context.begin_transaction():
             context.run_migrations()

@@ -35,9 +35,14 @@ def get_session_factory() -> sessionmaker[Session]:
 
 
 @contextmanager
-def session_scope() -> Iterator[Session]:
-    """一次事务边界：正常退出提交，异常时由关闭会话回滚并继续抛出。"""
-    session = get_session_factory()()
+def session_scope(
+    factory: sessionmaker[Session] | None = None,
+) -> Iterator[Session]:
+    """一次事务边界：正常退出提交，异常时由关闭会话回滚并继续抛出。
+
+    ``factory`` 供集成测试绑定独立测试库；生产调用不传，使用应用会话工厂。
+    """
+    session = (factory or get_session_factory())()
     try:
         yield session
         session.commit()
