@@ -9,9 +9,17 @@ from contextlib import contextmanager
 from functools import lru_cache
 
 from sqlalchemy import Engine, create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.infra.config import get_settings
+
+
+class Base(DeclarativeBase):
+    """所有表的声明基类。
+
+    各模块的 ``models.py`` 只从这个基类继承，类与列的元数据汇总在
+    ``Base.metadata`` 上供迁移和测试使用；不在此声明任何具体表。
+    """
 
 
 @lru_cache
