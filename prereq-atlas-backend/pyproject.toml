@@ -34,6 +34,8 @@ packages = ["src/app"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# 测试可 `from fixtures...` 导入共享夹具；`src` 同时加入以支持未安装时的直接运行。
+pythonpath = ["src", "tests"]
 # 沙箱里 pytest 的缓存目录写入被拒（WinError 5），关闭缓存插件避免噪音。
 addopts = "-ra -p no:cacheprovider"
 markers = [
