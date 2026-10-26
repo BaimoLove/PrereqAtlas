@@ -4,27 +4,27 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import Engine, create_engine
 
-from app.infra.config import get_settings
 from app.infra.db import get_engine
 from app.main import create_app
 
 pytestmark = pytest.mark.integration
 
 
-def require_database() -> None:
-    if "change-me" in get_settings().database_url:
-        pytest.skip("DATABASE_URL 仍是占位值，跳过集成测试")
-
-
-def test_ready_reports_ok_when_database_reachable() -> None:
-    require_database()
-    with TestClient(create_app()) as client:
-        response = client.get("/health/ready")
+def test_ready_reports_ok_when_database_reachable(test_engine: Engine) -> None:
+    app = create_app()
+    app.dependency_overrides[get_engine] = lambda: test_engine
+    try:
+        with TestClient(app) as client:
+            response = client.get("/health/ready")
+    finally:
+        app.dependency_overrides.clear()
 
     assert response.status_code == 200
-    assert response.json()["database"] == "ok"
+    payload = response.json()
+    assert payload["status"] == "ready"
+    assert payload["database"] == "ok"
 
 
 def test_ready_reports_503_when_database_unreachable() -> None:
@@ -42,3 +42,7 @@ def test_ready_reports_503_when_database_unreachable() -> None:
         unreachable.dispose()
 
     assert response.status_code == 503
+    payload = response.json()
+    assert payload["code"] == "SERVICE_UNAVAILABLE"
+    assert payload["request_id"]
+    assert "invalid" not in response.text
