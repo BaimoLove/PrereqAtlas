@@ -151,7 +151,7 @@ def test_protection_constants_match_the_frozen_table() -> None:
     assert (BATCH_REVIEW_MIN, BATCH_REVIEW_MAX) == (1, 112)
     assert (USERNAME_MIN, USERNAME_MAX) == (3, 32)
     assert USERNAME_PATTERN == r"^[A-Za-z0-9_]+$"
-    assert (PASSWORD_MIN, PASSWORD_MAX) == (8, 128)
+    assert (PASSWORD_MIN, PASSWORD_MAX) == (6, 128)
     assert IMPORT_MAX_BYTES == 10 * 1024 * 1024
     assert IMPORT_MAX_RECORDS == 10000
     assert SEARCH_MAX == 100

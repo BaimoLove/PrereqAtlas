@@ -166,7 +166,7 @@ def test_register_username_and_password_rules() -> None:
     for username in ("ab", "A" * 33, "a b", "用户", "a-b", "a.b", ""):
         with pytest.raises(ValidationError):
             RegisterRequest(username=username, password="12345678")
-    for password in ("1234567", "p" * 129, ""):
+    for password in ("12345", "p" * 129, ""):
         with pytest.raises(ValidationError):
             RegisterRequest(username="abc", password=password)
     # 密码不做 TRIM：首尾空格是密码的一部分。

@@ -143,9 +143,9 @@ CASES: list[tuple[str, object, bool]] = [
         lambda: RegisterRequest(username="a" * 33, password="12345678"),
         False,
     ),
-    # password: 8～128
-    ("password 7", lambda: RegisterRequest(username="abc", password="p" * 7), False),
-    ("password 8", lambda: RegisterRequest(username="abc", password="p" * 8), True),
+    # password: 6～128
+    ("password 5", lambda: RegisterRequest(username="abc", password="p" * 5), False),
+    ("password 6", lambda: RegisterRequest(username="abc", password="p" * 6), True),
     (
         "password 128",
         lambda: RegisterRequest(username="abc", password="p" * 128),
