@@ -493,6 +493,16 @@ class ResourceItem(ResponseModel):
     source: ResourceSource | None = None
 
 
+class DraftResourceItem(ResponseModel):
+    """草稿详情中的资料：与 ``ResourceItem`` 相同，另带所属概念。"""
+
+    resource_id: IdStr
+    concept_id: IdStr
+    title: ResourceTitle
+    url: OptionalUrl
+    source: ResourceSource | None = None
+
+
 class RelatedConcept(ResponseModel):
     relation_id: IdStr
     concept_id: IdStr
@@ -661,7 +671,7 @@ class DraftDetail(ResponseModel):
     chapters: list[ChapterItem]
     concepts: list[GraphNode]
     relations: list[AdminRelation]
-    resources: list[ResourceItem]
+    resources: list[DraftResourceItem]
     review_summary: DraftReviewSummary
     validation_summary: DraftValidationSummary
 
