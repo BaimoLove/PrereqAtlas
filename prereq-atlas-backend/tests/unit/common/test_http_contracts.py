@@ -357,7 +357,7 @@ def test_user_summary_and_token_response_shapes() -> None:
         UserSummary(id=42, username="student_1", role="STUDENT")  # type: ignore[arg-type]
 
 
-def test_plan_detail_serializes_ids_as_strings_and_timestamps_as_utc_millis() -> None:
+def test_plan_detail_serializes_ids_as_strings_and_timestamps_as_beijing_millis() -> None:
     detail = PlanDetail(
         id="42",
         title="复习方案",
@@ -381,8 +381,8 @@ def test_plan_detail_serializes_ids_as_strings_and_timestamps_as_utc_millis() ->
     payload = detail.model_dump(mode="json")
     assert payload["id"] == "42"
     assert payload["owner_id"] == "7"
-    assert payload["created_at"] == "2026-10-26T13:18:15.123Z"
-    assert payload["progress"][0]["updated_at"] == "2026-10-26T13:18:15.999Z"
+    assert payload["created_at"] == "2026-10-26T21:18:15.123+08:00"
+    assert payload["progress"][0]["updated_at"] == "2026-10-26T21:18:15.999+08:00"
     assert payload["progress"][0]["concept_id"] == "5"
 
 

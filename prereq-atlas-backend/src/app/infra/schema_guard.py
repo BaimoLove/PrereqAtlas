@@ -17,11 +17,12 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import CheckConstraint, Engine, MetaData, UniqueConstraint, create_engine, text
+from sqlalchemy import CheckConstraint, Engine, MetaData, UniqueConstraint, text
 from sqlalchemy.dialects import mysql
 from sqlalchemy.engine import URL
 from sqlalchemy.sql.schema import Table
 
+from app.infra.db import create_database_engine
 from app.infra.metadata import metadata as default_metadata
 
 BACKEND_ROOT = Path(__file__).resolve().parents[3]
@@ -408,7 +409,7 @@ def assert_structure_matches_metadata(
 
 def stamp_baseline(url: URL, revision: str = "head", metadata: MetaData = default_metadata) -> None:
     """结构一致时才登记 Alembic 基线；不一致不写任何版本行。"""
-    engine = create_engine(url, pool_pre_ping=True)
+    engine = create_database_engine(url, pool_pre_ping=True)
     try:
         assert_structure_matches_metadata(engine, metadata)
         config = Config(str(BACKEND_ROOT / "alembic.ini"))

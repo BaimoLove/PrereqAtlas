@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import datetime
 
+from app.common.time import BEIJING_TZ
 from app.infra.config import Settings
 
 _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
@@ -34,6 +36,14 @@ _HANDLER_MARKER = "_prereq_atlas_handler"
 _LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
 
 
+class BeijingFormatter(logging.Formatter):
+    """将标准 LogRecord Unix 时间戳格式化为明确标注 UTC+8 的本地文本。"""
+
+    def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
+        value = datetime.fromtimestamp(record.created, tz=BEIJING_TZ)
+        return value.isoformat(timespec="milliseconds")
+
+
 def sanitize_text(value: str) -> str:
     """对文本中的口令、Bearer 令牌与数据库 URL 口令做脱敏。"""
     cleaned = value
@@ -42,7 +52,7 @@ def sanitize_text(value: str) -> str:
     return cleaned
 
 
-class SanitizingFormatter(logging.Formatter):
+class SanitizingFormatter(BeijingFormatter):
     """在输出前对完整格式化结果（含异常文本）再脱敏一次。"""
 
     def format(self, record: logging.LogRecord) -> str:

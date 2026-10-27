@@ -15,9 +15,9 @@ from app.common.contracts import (
     MAX_BIGINT_UNSIGNED,
     MAX_SAFE_INTEGER,
     PAGE_SIZE_MAX,
+    BeijingMillis,
     IdStr,
     PageParams,
-    UtcMillis,
     format_id,
     parse_id,
 )
@@ -27,7 +27,7 @@ from app.common.contracts import Revision as RevisionType
 
 
 class _TimestampHolder(BaseModel):
-    at: UtcMillis
+    at: BeijingMillis
 
 
 class _IdHolder(BaseModel):
@@ -121,11 +121,25 @@ def test_revision_bounds_are_json_safe_and_ddl_aligned() -> None:
             _ProgressRevisionHolder(revision=value)
 
 
-def test_utc_millis_serializes_iso8601_with_z() -> None:
+def test_time_serializes_as_beijing_iso8601_with_offset() -> None:
     holder = _TimestampHolder(at=datetime(2026, 10, 26, 13, 18, 15, 123456, tzinfo=UTC))
-    assert holder.model_dump_json() == '{"at":"2026-10-26T13:18:15.123Z"}'
+    assert holder.model_dump_json() == '{"at":"2026-10-26T21:18:15.123+08:00"}'
 
 
-def test_utc_millis_treats_naive_input_as_utc() -> None:
+def test_time_treats_naive_database_input_as_beijing() -> None:
     holder = _TimestampHolder(at=datetime(2026, 10, 26, 13, 18, 15, 999999))
-    assert holder.model_dump_json() == '{"at":"2026-10-26T13:18:15.999Z"}'
+    assert holder.model_dump_json() == '{"at":"2026-10-26T13:18:15.999+08:00"}'
+
+
+@pytest.mark.parametrize(("raw", "expected"), [
+    ("2026-10-26T16:31:35.977Z", "2026-10-27T00:31:35.977+08:00"),
+    ("2026-10-27T00:31:35.977+08:00", "2026-10-27T00:31:35.977+08:00"),
+    ("2026-10-26T11:31:35.977-05:00", "2026-10-27T00:31:35.977+08:00"),
+    ("2026-10-27T00:31:35.977", "2026-10-27T00:31:35.977+08:00"),
+])
+def test_time_normalizes_offsets_and_roundtrips_without_double_shift(raw, expected):
+    holder = _TimestampHolder.model_validate({"at": raw})
+    assert holder.model_dump(mode="json")["at"] == expected
+    assert holder.at.utcoffset().total_seconds() == 28800
+    restored = _TimestampHolder.model_validate_json(holder.model_dump_json())
+    assert restored.model_dump(mode="json")["at"] == expected

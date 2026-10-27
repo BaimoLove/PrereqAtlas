@@ -6,6 +6,7 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from app.infra.config import get_settings
+from app.infra.db import configure_database_timezone
 from app.infra.metadata import metadata as target_metadata
 
 config = context.config
@@ -49,6 +50,7 @@ def run_migrations_online() -> None:
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
+    configure_database_timezone(connectable)
 
     with connectable.connect() as connection:
         _configure_context(connection=connection)

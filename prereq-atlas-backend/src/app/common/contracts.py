@@ -1,6 +1,7 @@
 """跨模块共享契约：ID、分页、修订号与时间序列化。
 
 本模块只定义“跨模块真正共享”的结构：业务模块自己的中间对象留在所属包内。
+时间字段统一使用 UTC+8，并保留明确的 ISO-8601 时区偏移。
 HTTP 字段模型在 :mod:`app.common.http_contracts`，接口目录在
 :mod:`app.common.api_catalog`，异常类型与处理器在 T04 接入。
 """
@@ -8,7 +9,7 @@ HTTP 字段模型在 :mod:`app.common.http_contracts`，接口目录在
 from __future__ import annotations
 
 import re
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import StrEnum
 from typing import Annotated, Any
 
@@ -21,6 +22,8 @@ from pydantic import (
     Strict,
     model_validator,
 )
+
+from app.common.time import as_beijing, serialize_beijing_millis
 
 # BIGINT UNSIGNED 上限；HTTP 中的 ID 用十进制字符串表达，避免 JS Number 精度损失。
 MAX_BIGINT_UNSIGNED = 2**64 - 1
@@ -59,14 +62,6 @@ def parse_id(value: str) -> int:
     return int(value)
 
 
-def serialize_utc_millis(value: datetime) -> str:
-    """按 UTC ISO-8601 毫秒输出；无时区的数据库时间按 UTC 解释。"""
-    if value.tzinfo is None:
-        value = value.replace(tzinfo=UTC)
-    value = value.astimezone(UTC)
-    return f"{value:%Y-%m-%dT%H:%M:%S}.{value.microsecond // 1000:03d}Z"
-
-
 # HTTP 请求/响应中的持久化 ID：字符串、严格类型、十进制正整数。
 IdStr = Annotated[str, Strict(), AfterValidator(validate_id_string)]
 
@@ -76,9 +71,11 @@ Revision = Annotated[int, Strict(), Field(ge=0, le=MAX_SAFE_INTEGER)]
 # review_plan_node.progress_revision 对应 DDL 的 INT UNSIGNED。
 ProgressRevision = Annotated[int, Strict(), Field(ge=0, le=2**32 - 1)]
 
-# 所有对外时间统一 UTC ISO-8601 毫秒格式。
-UtcMillis = Annotated[
-    datetime, PlainSerializer(serialize_utc_millis, return_type=str, when_used="json")
+# 所有对外时间统一 UTC+8 ISO-8601 毫秒格式，并规范化模型内的时间。
+BeijingMillis = Annotated[
+    datetime,
+    AfterValidator(as_beijing),
+    PlainSerializer(serialize_beijing_millis, return_type=str, when_used="json"),
 ]
 
 

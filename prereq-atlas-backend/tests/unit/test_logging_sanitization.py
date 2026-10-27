@@ -61,3 +61,10 @@ def test_configure_logging_is_idempotent() -> None:
     first = len(logging.getLogger().handlers)
     configure_logging(settings)
     assert len(logging.getLogger().handlers) == first
+
+
+def test_log_timestamp_is_explicit_beijing_independent_of_host_timezone():
+    record = logging.LogRecord("test.clock", logging.INFO, __file__, 1, "ok", (), None)
+    record.created = 1793032295.123
+    formatted = SanitizingFormatter("%(asctime)s %(message)s").format(record)
+    assert formatted == "2026-10-27T00:31:35.123+08:00 ok"

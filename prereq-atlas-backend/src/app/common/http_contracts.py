@@ -2,7 +2,7 @@
 
 字段名、长度、枚举与保护值以 ``plan.md`` 第 5.3/5.4 节和
 :mod:`app.common.contracts` 的冻结值为准。所有写请求模型禁止额外字段；
-内部 ID 在 JSON 中一律使用十进制字符串，响应时间使用 UTC 毫秒格式。
+内部 ID 在 JSON 中一律使用十进制字符串，响应时间使用 UTC+8 毫秒格式。
 """
 
 from __future__ import annotations
@@ -53,6 +53,7 @@ from app.common.contracts import (
     USERNAME_PATTERN,
     VERSION_LABEL_MAX,
     VERSION_LABEL_MIN,
+    BeijingMillis,
     GraphState,
     IdStr,
     ImportStatus,
@@ -64,7 +65,6 @@ from app.common.contracts import (
     ReviewStatus,
     Revision,
     Role,
-    UtcMillis,
 )
 
 
@@ -214,7 +214,7 @@ Sha256Hex = Annotated[str, StringConstraints(strict=True, pattern=r"^[0-9a-f]{64
 DisplayOrder = Annotated[int, Field(ge=0, le=2**32 - 1)]
 PageNumber = Annotated[int, Field(ge=PAGE_MIN)]
 PageSize = Annotated[int, Field(ge=PAGE_SIZE_MIN, le=PAGE_SIZE_MAX)]
-UtcMillisOut = UtcMillis
+BeijingMillisOut = BeijingMillis
 
 
 class ReviewDecision(StrEnum):
@@ -513,7 +513,7 @@ class ConceptCard(ResponseModel):
 
 class MasteryItem(ResponseModel):
     concept_id: IdStr
-    declared_at: UtcMillisOut
+    declared_at: BeijingMillisOut
     declared_version_id: IdStr
     visibility: MasteryVisibility
 
@@ -523,7 +523,7 @@ class ProgressItem(ResponseModel):
     stage_index: Annotated[int, Field(ge=1)]
     status: ProgressStatus
     revision: ProgressRevision
-    updated_at: UtcMillisOut
+    updated_at: BeijingMillisOut
 
 
 class PlanDetail(ResponseModel):
@@ -534,7 +534,7 @@ class PlanDetail(ResponseModel):
     schema_version: str
     algorithm_version: str
     based_on_plan_id: IdStr | None = None
-    created_at: UtcMillisOut
+    created_at: BeijingMillisOut
     input_snapshot: dict[str, Any]
     result_snapshot: dict[str, Any]
     progress: list[ProgressItem]
@@ -544,7 +544,7 @@ class PlanListItem(ResponseModel):
     id: IdStr
     title: Annotated[str, StringConstraints(max_length=TITLE_MAX)]
     graph_version_id: IdStr
-    created_at: UtcMillisOut
+    created_at: BeijingMillisOut
     target_count: Annotated[int, Field(ge=0)]
     node_count: Annotated[int, Field(ge=0)]
     completed_count: Annotated[int, Field(ge=0)]
@@ -591,7 +591,7 @@ class VersionSummary(ResponseModel):
     content_hash: Sha256Hex | None = None
     draft_revision: Revision
     validated_revision: Revision | None = None
-    published_at: UtcMillisOut | None = None
+    published_at: BeijingMillisOut | None = None
     is_active: bool
     active_revision: Revision | None = None
 
@@ -613,7 +613,7 @@ class AdminRelation(ResponseModel):
     review_status: ReviewStatus
     rationale: Rationale | None = None
     reviewed_by: IdStr | None = None
-    reviewed_at: UtcMillisOut | None = None
+    reviewed_at: BeijingMillisOut | None = None
     structural_type: Literal["direct", "transitive"] | None = None
     source_edge_key: Annotated[str, StringConstraints(max_length=SOURCE_KEY_MAX)] | None = None
 
@@ -719,7 +719,7 @@ class AuditItem(ResponseModel):
     revision_before: Revision | None = None
     revision_after: Revision | None = None
     summary: Annotated[str, StringConstraints(max_length=500)]
-    created_at: UtcMillisOut
+    created_at: BeijingMillisOut
 
 
 class AuditListResponse(Page[AuditItem]):

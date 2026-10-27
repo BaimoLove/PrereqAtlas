@@ -9,11 +9,12 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator
 
 import pytest
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import Engine
 from sqlalchemy.engine import URL
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.infra.config import get_settings
+from app.infra.db import create_database_engine
 from support.db import (
     apply_schema_sql,
     create_database,
@@ -40,7 +41,7 @@ def _server_url(url: URL) -> URL:
 @pytest.fixture(scope="session")
 def test_database_url() -> URL:
     url = resolve_test_database_url()
-    server = create_engine(_server_url(url), isolation_level="AUTOCOMMIT")
+    server = create_database_engine(_server_url(url), isolation_level="AUTOCOMMIT")
     try:
         create_database(server, url.database or "")
         upgrade_to_head(url)
@@ -51,14 +52,16 @@ def test_database_url() -> URL:
 
 @pytest.fixture(scope="session")
 def server_engine(test_database_url: URL) -> Iterator[Engine]:
-    engine = create_engine(_server_url(test_database_url), isolation_level="AUTOCOMMIT")
+    engine = create_database_engine(
+        _server_url(test_database_url), isolation_level="AUTOCOMMIT",
+    )
     yield engine
     engine.dispose()
 
 
 @pytest.fixture(scope="session")
 def test_engine(test_database_url: URL) -> Iterator[Engine]:
-    engine = create_engine(test_database_url, pool_pre_ping=True)
+    engine = create_database_engine(test_database_url, pool_pre_ping=True)
     yield engine
     engine.dispose()
 
@@ -71,7 +74,7 @@ def test_session_factory(test_engine: Engine) -> sessionmaker[Session]:
 @pytest.fixture(scope="session")
 def development_engine() -> Iterator[Engine]:
     """开发库只读连接；T03 的结构对照需要它作为 DDL 基准。"""
-    engine = create_engine(get_settings().database_url, pool_pre_ping=True)
+    engine = create_database_engine(get_settings().database_url, pool_pre_ping=True)
     yield engine
     engine.dispose()
 
@@ -89,7 +92,7 @@ def scratch_engine(server_engine: Engine) -> Iterator[ScratchFactory]:
         name = scratch_name(prefix)
         create_database(server_engine, name)
         url = server_engine.url.set(database=name)
-        engine = create_engine(url, pool_pre_ping=True)
+        engine = create_database_engine(url, pool_pre_ping=True)
         created.append(name)
         engines.append(engine)
         return url, engine
