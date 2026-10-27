@@ -572,6 +572,15 @@ class ImportIssue(ResponseModel):
     message: str
 
 
+class ImportRawItem(ResponseModel):
+    """导入明细的一条原始记录；按节点后边、逻辑记录号稳定排序。"""
+
+    file_kind: Literal["node", "edge"]
+    source_key: Annotated[str, StringConstraints(max_length=SOURCE_KEY_MAX)]
+    logical_record_no: Annotated[int, Field(ge=1)]
+    raw: dict[str, Any]
+
+
 class ImportReport(ResponseModel):
     batch_id: IdStr
     status: ImportStatus
@@ -582,6 +591,10 @@ class ImportReport(ResponseModel):
     errors: list[ImportIssue]
     warnings: list[ImportIssue]
     mapping_summary: dict[str, Any]
+    items: list[ImportRawItem] = Field(default_factory=list)
+    page: Annotated[int, Field(ge=1)] = 1
+    page_size: Annotated[int, Field(ge=1, le=PAGE_SIZE_MAX)] = PAGE_SIZE_DEFAULT
+    total: Annotated[int, Field(ge=0)] = 0
 
 
 class VersionSummary(ResponseModel):
