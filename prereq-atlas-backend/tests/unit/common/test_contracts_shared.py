@@ -125,9 +125,9 @@ def test_error_response_shape_matches_contract() -> None:
 
 
 def test_structured_error_details_shapes() -> None:
-    assert FieldError(field="password", reason="长度 8～128").model_dump() == {
+    assert FieldError(field="password", reason="长度 6～128").model_dump() == {
         "field": "password",
-        "reason": "长度 8～128",
+        "reason": "长度 6～128",
     }
     assert ReferenceErrorDetails(resource_type="chapter", ids=["3"]).model_dump() == {
         "resource_type": "chapter",
