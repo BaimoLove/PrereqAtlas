@@ -1,4 +1,4 @@
-"""T10 管理端图谱版本与草稿入口。"""
+"""T10～T11 管理端图谱版本与草稿入口。"""
 
 from typing import Annotated
 
@@ -8,9 +8,18 @@ from sqlalchemy.orm import Session
 from app.api.dependencies import get_session, require_admin
 from app.common.contracts import Actor, IdStr
 from app.common.http_contracts import (
+    AcceptImportRequest,
+    AcceptImportResponse,
+    BatchReviewResponse,
     CreateDraftRequest,
     DraftCreateResponse,
     DraftDetail,
+    RelationBatchReviewRequest,
+    RelationCreateRequest,
+    RelationDeleteRequest,
+    RelationMutationResponse,
+    RelationUpdateRequest,
+    RevisionResponse,
     VersionListQuery,
     VersionListResponse,
 )
@@ -52,3 +61,15 @@ def get_draft(
     session: Annotated[Session, Depends(get_session, scope="function")],
 ) -> DraftDetail:
     return service.get_draft(session, draft_id, actor=actor)
+
+
+@router.post("/admin/graph/drafts/{draft_id}/imports", summary="接收已暂存批次到草稿")
+def accept_import(
+    draft_id: IdStr,
+    request: AcceptImportRequest,
+    actor: Annotated[Actor, Depends(require_admin)],
+    session: Annotated[Session, Depends(get_session, scope="function")],
+) -> AcceptImportResponse:
+    """接收一个 STAGED 批次：写入章节/概念与 PENDING 候选关系，并把批次置为 CONSUMED。"""
+    return service.accept_import(session, draft_id, actor=actor, request=request)
+

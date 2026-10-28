@@ -32,12 +32,40 @@ from app.infra.errors import AppError
 from app.modules.catalog import repository
 from app.modules.catalog.context import (
     ConceptContent,
+    ConceptIdentity,
     CopyContentResult,
     DraftWriteContext,
     VersionResourceLink,
 )
 
 MAX_DISPLAY_ORDER = 2**32 - 1
+
+
+def find_concept_identity(
+    tx: Session,
+    *,
+    code: str | None = None,
+    source_namespace: str | None = None,
+    source_key: str | None = None,
+) -> ConceptIdentity | None:
+    """按编码或来源身份读取既有概念身份，供调用方在写入前判定冲突。
+
+    只读，不写任何行，也不需要草稿上下文。
+    """
+    if code is not None:
+        row = repository.find_concept_by_code(tx, code)
+    elif source_namespace is not None and source_key is not None:
+        row = repository.find_concept_by_source(tx, source_namespace, source_key)
+    else:
+        raise TypeError("必须提供 code 或完整的来源身份")
+    if row is None:
+        return None
+    return ConceptIdentity(
+        concept_id=row.id,
+        code=row.code,
+        source_namespace=row.source_namespace,
+        source_key=row.source_key,
+    )
 
 
 def _field_error(field: str, reason: str) -> NoReturn:
@@ -291,6 +319,11 @@ def add_resource(
     return VersionResource(
         resource_id=row.resource_id, title=row.title, url=row.url, source=row.source
     )
+
+
+def version_has_concept(tx: Session, version_id: int, concept_id: int) -> bool:
+    """概念是否在本版本内有内容行；用于关系与资料的“同版引用”校验。"""
+    return repository.get_concept_revision(tx, version_id, concept_id) is not None
 
 
 def read_version_chapters(tx: Session, version_id: int) -> tuple[VersionChapter, ...]:

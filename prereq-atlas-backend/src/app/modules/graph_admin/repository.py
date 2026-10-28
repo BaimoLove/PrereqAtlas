@@ -5,10 +5,29 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from dataclasses import dataclass
+from decimal import Decimal
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.modules.graph_admin.models import ActiveGraph, GraphAudit, GraphRelation, GraphVersion
+
+
+@dataclass(frozen=True, slots=True)
+class NewRelation:
+    """待插入的一条关系；两端是已解析的概念稳定身份。"""
+
+    source_concept_id: int
+    target_concept_id: int
+    necessity: str = "REQUIRED"
+    structural_type: str | None = None
+    source_strength: Decimal | None = None
+    review_status: str = "PENDING"
+    rationale: str | None = None
+    source_batch_id: int | None = None
+    source_edge_key: str | None = None
 
 
 def get_version(session: Session, version_id: int) -> GraphVersion | None:
@@ -91,6 +110,30 @@ def review_counts(session: Session, version_id: int) -> dict[str, int]:
     for status, count in session.execute(statement).all():
         counts[str(status)] = int(count)
     return counts
+
+
+def add_relations(
+    session: Session, *, version_id: int, relations: Sequence[NewRelation]
+) -> list[GraphRelation]:
+    """插入一批关系并返回持久化后的行；唯一键冲突由调用方转成业务错误。"""
+    rows = [
+        GraphRelation(
+            version_id=version_id,
+            source_concept_id=relation.source_concept_id,
+            target_concept_id=relation.target_concept_id,
+            necessity=relation.necessity,
+            structural_type=relation.structural_type,
+            source_strength=relation.source_strength,
+            review_status=relation.review_status,
+            rationale=relation.rationale,
+            source_batch_id=relation.source_batch_id,
+            source_edge_key=relation.source_edge_key,
+        )
+        for relation in relations
+    ]
+    session.add_all(rows)
+    session.flush()
+    return rows
 
 
 def copy_relations(

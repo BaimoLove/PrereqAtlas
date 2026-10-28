@@ -66,6 +66,20 @@ class CopyContentResult:
 
 
 @dataclass(frozen=True, slots=True)
+class ConceptIdentity:
+    """概念稳定身份的只读视图，供调用方在写入前核对映射冲突。"""
+
+    concept_id: int
+    code: str
+    source_namespace: str | None
+    source_key: str | None
+
+    @property
+    def source_identity(self) -> tuple[str | None, str | None]:
+        return (self.source_namespace, self.source_key)
+
+
+@dataclass(frozen=True, slots=True)
 class VersionResourceLink:
     """资料及其所属概念；草稿详情需要按概念展示资料。"""
 

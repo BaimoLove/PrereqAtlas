@@ -6,6 +6,7 @@ catalog 没有管理写 HTTP 入口：草稿状态由 M06 锁定并通过 ``Draf
 
 from app.modules.catalog.context import (
     ConceptContent,
+    ConceptIdentity,
     CopyContentResult,
     DraftStateGate,
     DraftWriteContext,
@@ -15,15 +16,18 @@ from app.modules.catalog.service import (
     add_resource,
     copy_content,
     ensure_concept,
+    find_concept_identity,
     read_version_chapters,
     read_version_nodes,
     read_version_resources,
+    version_has_concept,
     write_chapter,
     write_concept_content,
 )
 
 __all__ = [
     "ConceptContent",
+    "ConceptIdentity",
     "CopyContentResult",
     "DraftStateGate",
     "DraftWriteContext",
@@ -31,9 +35,11 @@ __all__ = [
     "add_resource",
     "copy_content",
     "ensure_concept",
+    "find_concept_identity",
     "read_version_chapters",
     "read_version_nodes",
     "read_version_resources",
+    "version_has_concept",
     "write_chapter",
     "write_concept_content",
 ]

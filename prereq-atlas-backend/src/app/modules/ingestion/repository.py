@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
@@ -115,6 +116,42 @@ def add_raw_edges(session: Session, batch_id: int, edges: tuple[RawEdgeRecord, .
 
 def get_batch(session: Session, batch_id: int) -> ImportBatch | None:
     return session.get(ImportBatch, batch_id)
+
+
+def list_raw_nodes(session: Session, batch_id: int) -> list[ImportRawNode]:
+    """按逻辑记录号稳定返回批次的全部原始节点。"""
+    statement = (
+        select(ImportRawNode)
+        .where(ImportRawNode.batch_id == batch_id)
+        .order_by(ImportRawNode.logical_record_no)
+    )
+    return list(session.scalars(statement))
+
+
+def list_raw_edges(session: Session, batch_id: int) -> list[ImportRawEdge]:
+    """按逻辑记录号稳定返回批次的全部原始边，含未被采用的结构分类。"""
+    statement = (
+        select(ImportRawEdge)
+        .where(ImportRawEdge.batch_id == batch_id)
+        .order_by(ImportRawEdge.logical_record_no)
+    )
+    return list(session.scalars(statement))
+
+
+def update_node_mapping(
+    session: Session, batch_id: int, mapping: Mapping[str, int]
+) -> int:
+    """把来源节点标记为 MAPPED 并指向概念身份；返回实际更新的行数。"""
+    updated = 0
+    for source_key, concept_id in mapping.items():
+        row = session.get(ImportRawNode, (batch_id, source_key))
+        if row is None:
+            continue
+        row.mapping_status = "MAPPED"
+        row.mapped_concept_id = concept_id
+        updated += 1
+    session.flush()
+    return updated
 
 
 def count_raw_items(session: Session, batch_id: int) -> int:
