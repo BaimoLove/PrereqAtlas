@@ -1,4 +1,4 @@
-"""T10～T11 管理端图谱版本与草稿入口。"""
+"""T10～T12 管理端图谱版本、草稿与关系入口。"""
 
 from typing import Annotated
 
@@ -73,3 +73,63 @@ def accept_import(
     """接收一个 STAGED 批次：写入章节/概念与 PENDING 候选关系，并把批次置为 CONSUMED。"""
     return service.accept_import(session, draft_id, actor=actor, request=request)
 
+
+@router.post(
+    "/admin/graph/drafts/{draft_id}/relations",
+    status_code=201,
+    summary="在草稿内新增一条先修关系",
+)
+def create_relation(
+    draft_id: IdStr,
+    request: RelationCreateRequest,
+    actor: Annotated[Actor, Depends(require_admin)],
+    session: Annotated[Session, Depends(get_session, scope="function")],
+) -> RelationMutationResponse:
+    return service.create_relation(session, draft_id, actor=actor, request=request)
+
+
+@router.post(
+    "/admin/graph/drafts/{draft_id}/relations/review",
+    summary="批量给出候选关系审核结论",
+)
+def batch_review_relations(
+    draft_id: IdStr,
+    request: RelationBatchReviewRequest,
+    actor: Annotated[Actor, Depends(require_admin)],
+    session: Annotated[Session, Depends(get_session, scope="function")],
+) -> BatchReviewResponse:
+    """整批共用一次 revision；任一条不存在或不属于本草稿则整批失败。"""
+    return service.batch_review(session, draft_id, actor=actor, request=request)
+
+
+@router.post(
+    "/admin/graph/drafts/{draft_id}/relations/{relation_id}/update",
+    summary="单条审核或修改先修关系",
+)
+def update_relation(
+    draft_id: IdStr,
+    relation_id: IdStr,
+    request: RelationUpdateRequest,
+    actor: Annotated[Actor, Depends(require_admin)],
+    session: Annotated[Session, Depends(get_session, scope="function")],
+) -> RelationMutationResponse:
+    """除端点/必要性变更外不做隐式改写；改端点自动退回 PENDING。"""
+    return service.update_relation(
+        session, draft_id, relation_id, actor=actor, request=request
+    )
+
+
+@router.post(
+    "/admin/graph/drafts/{draft_id}/relations/{relation_id}/delete",
+    summary="删除草稿内的一条先修关系",
+)
+def delete_relation(
+    draft_id: IdStr,
+    relation_id: IdStr,
+    request: RelationDeleteRequest,
+    actor: Annotated[Actor, Depends(require_admin)],
+    session: Annotated[Session, Depends(get_session, scope="function")],
+) -> RevisionResponse:
+    return service.delete_relation(
+        session, draft_id, relation_id, actor=actor, request=request
+    )

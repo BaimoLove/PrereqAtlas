@@ -684,3 +684,267 @@ def list_versions(
         for row in rows
     ]
     return VersionListResponse(items=items, total=total, page=page, page_size=page_size)
+
+
+def _reference_error(resource_type: str, ids: Sequence[str], message: str) -> NoReturn:
+    raise AppError(
+        ErrorCode.VALIDATION_ERROR,
+        message,
+        {"resource_type": resource_type, "ids": list(ids)},
+    )
+
+
+def _require_concepts_in_draft(
+    session: Session, version_id: int, concept_ids: Sequence[int]
+) -> None:
+    """关系两端必须在本草稿版本内有内容行，跨版引用整体拒绝。"""
+    missing = [
+        str(concept_id)
+        for concept_id in concept_ids
+        if not catalog.version_has_concept(session, version_id, concept_id)
+    ]
+    if missing:
+        _reference_error("concept", missing, "概念不属于当前草稿版本")
+
+
+def _bump_draft_revision(version: GraphVersion, expected_revision: int) -> int:
+    """一次成功写入只递增一次 revision，并让旧校验结论失效。"""
+    version.draft_revision = expected_revision + 1
+    version.validated_revision = None
+    return version.draft_revision
+
+
+def _require_relation(
+    session: Session, version_id: int, relation_id: str
+) -> GraphRelation:
+    relation = repository.get_relation(session, version_id, parse_id(relation_id))
+    if relation is None:
+        raise AppError(ErrorCode.NOT_FOUND, "先修关系不存在")
+    return relation
+
+
+def create_relation(
+    session: Session,
+    draft_id: str,
+    *,
+    actor: Actor,
+    request: RelationCreateRequest,
+) -> RelationMutationResponse:
+    """在草稿内新增一条 PENDING 先修关系；端点必须同版且不重复、不自环。"""
+    _require_admin(actor)
+    version_id = parse_id(draft_id)
+    version = _lock_writable_draft(session, version_id, request.expected_revision)
+    source_id = parse_id(request.source_concept_id)
+    target_id = parse_id(request.target_concept_id)
+    if source_id == target_id:
+        _reference_error("concept", [request.source_concept_id], "关系两端不能是同一概念")
+    _require_concepts_in_draft(session, version_id, [source_id, target_id])
+
+    necessity = Necessity.REQUIRED.value
+    duplicate = repository.find_relation(
+        session,
+        version_id,
+        source_concept_id=source_id,
+        target_concept_id=target_id,
+        necessity=necessity,
+    )
+    if duplicate is not None:
+        raise AppError(
+            ErrorCode.CONFLICT,
+            "同一先修关系在该版本内已存在",
+            {"resource_type": "graph_relation", "ids": [str(duplicate.id)]},
+        )
+
+    try:
+        relation = repository.add_relations(
+            session,
+            version_id=version_id,
+            relations=[
+                repository.NewRelation(
+                    source_concept_id=source_id,
+                    target_concept_id=target_id,
+                    necessity=necessity,
+                    review_status=ReviewStatus.PENDING.value,
+                    rationale=request.rationale,
+                )
+            ],
+        )[0]
+    except IntegrityError as exc:
+        raise AppError(
+            ErrorCode.CONFLICT,
+            "同一先修关系在该版本内已存在",
+            {"resource_type": "graph_relation", "ids": []},
+        ) from exc
+
+    new_revision = _bump_draft_revision(version, request.expected_revision)
+    repository.add_audit(
+        session,
+        version_id=version_id,
+        operator_id=actor.user_id,
+        action=RELATION_ACTION,
+        revision_before=request.expected_revision,
+        revision_after=new_revision,
+        summary=f"新增先修关系 {source_id} → {target_id}",
+    )
+    session.commit()
+    return RelationMutationResponse(
+        relation=_admin_relation(relation), new_revision=new_revision
+    )
+
+
+def delete_relation(
+    session: Session,
+    draft_id: str,
+    relation_id: str,
+    *,
+    actor: Actor,
+    request: RelationDeleteRequest,
+) -> RevisionResponse:
+    """删除本草稿内的一条关系；不存在或属于其他版本统一 404。"""
+    _require_admin(actor)
+    version_id = parse_id(draft_id)
+    version = _lock_writable_draft(session, version_id, request.expected_revision)
+    relation = _require_relation(session, version_id, relation_id)
+    summary = (
+        f"删除先修关系 {relation.source_concept_id} → {relation.target_concept_id}"
+    )
+    repository.delete_relation(session, relation)
+    new_revision = _bump_draft_revision(version, request.expected_revision)
+    repository.add_audit(
+        session,
+        version_id=version_id,
+        operator_id=actor.user_id,
+        action=RELATION_ACTION,
+        revision_before=request.expected_revision,
+        revision_after=new_revision,
+        summary=summary,
+    )
+    session.commit()
+    return RevisionResponse(new_revision=new_revision)
+
+
+def batch_review(
+    session: Session,
+    draft_id: str,
+    *,
+    actor: Actor,
+    request: RelationBatchReviewRequest,
+) -> BatchReviewResponse:
+    """对一批候选给出统一结论；整批共用一次 revision，每条仍各留审核人与理由。"""
+    _require_admin(actor)
+    version_id = parse_id(draft_id)
+    version = _lock_writable_draft(session, version_id, request.expected_revision)
+    ordered_ids = list(dict.fromkeys(parse_id(item) for item in request.relation_ids))
+    relations = repository.list_relations_by_ids(session, version_id, ordered_ids)
+    found = {relation.id for relation in relations}
+    missing = [str(relation_id) for relation_id in ordered_ids if relation_id not in found]
+    if missing:
+        _reference_error(
+            "graph_relation", missing, "先修关系不属于当前草稿版本"
+        )
+
+    reviewed_at = now_beijing().replace(tzinfo=None)
+    for relation in relations:
+        relation.review_status = request.review_status.value
+        relation.reviewed_by = actor.user_id
+        relation.reviewed_at = reviewed_at
+        relation.rationale = request.rationale
+
+    new_revision = _bump_draft_revision(version, request.expected_revision)
+    repository.add_audit(
+        session,
+        version_id=version_id,
+        operator_id=actor.user_id,
+        action=RELATION_ACTION,
+        revision_before=request.expected_revision,
+        revision_after=new_revision,
+        summary=f"批量审核 {len(relations)} 条关系：{request.review_status.value}",
+    )
+    session.commit()
+    return BatchReviewResponse(
+        affected_count=len(relations), new_revision=new_revision
+    )
+
+
+def update_relation(
+    session: Session,
+    draft_id: str,
+    relation_id: str,
+    *,
+    actor: Actor,
+    request: RelationUpdateRequest,
+) -> RelationMutationResponse:
+    """单条审核或修改端点；改端点/必要性会撤销原批准并让旧校验失效。"""
+    _require_admin(actor)
+    version_id = parse_id(draft_id)
+    version = _lock_writable_draft(session, version_id, request.expected_revision)
+    relation = _require_relation(session, version_id, relation_id)
+
+    endpoint_changed = any(
+        value is not None
+        for value in (
+            request.source_concept_id,
+            request.target_concept_id,
+            request.necessity,
+        )
+    )
+    if endpoint_changed:
+        source_id = (
+            parse_id(request.source_concept_id)
+            if request.source_concept_id is not None
+            else relation.source_concept_id
+        )
+        target_id = (
+            parse_id(request.target_concept_id)
+            if request.target_concept_id is not None
+            else relation.target_concept_id
+        )
+        necessity = request.necessity or relation.necessity
+        if source_id == target_id:
+            _reference_error("concept", [str(source_id)], "关系两端不能是同一概念")
+        _require_concepts_in_draft(session, version_id, [source_id, target_id])
+        duplicate = repository.find_relation(
+            session,
+            version_id,
+            source_concept_id=source_id,
+            target_concept_id=target_id,
+            necessity=necessity,
+        )
+        if duplicate is not None and duplicate.id != relation.id:
+            raise AppError(
+                ErrorCode.CONFLICT,
+                "同一先修关系在该版本内已存在",
+                {"resource_type": "graph_relation", "ids": [str(duplicate.id)]},
+            )
+        relation.source_concept_id = source_id
+        relation.target_concept_id = target_id
+        relation.necessity = necessity
+        relation.review_status = ReviewStatus.PENDING.value
+        relation.reviewed_by = None
+        relation.reviewed_at = None
+        relation.rationale = request.rationale
+        summary = f"修改先修关系为 {source_id} → {target_id}，原审核结论失效"
+    elif request.review_status is not None:
+        relation.review_status = request.review_status.value
+        relation.reviewed_by = actor.user_id
+        relation.reviewed_at = now_beijing().replace(tzinfo=None)
+        relation.rationale = request.rationale
+        summary = f"单条审核关系 {relation.id}：{request.review_status.value}"
+    else:
+        relation.rationale = request.rationale
+        summary = f"修改关系 {relation.id} 的审核理由"
+
+    new_revision = _bump_draft_revision(version, request.expected_revision)
+    repository.add_audit(
+        session,
+        version_id=version_id,
+        operator_id=actor.user_id,
+        action=RELATION_ACTION,
+        revision_before=request.expected_revision,
+        revision_after=new_revision,
+        summary=summary,
+    )
+    session.commit()
+    return RelationMutationResponse(
+        relation=_admin_relation(relation), new_revision=new_revision
+    )

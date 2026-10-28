@@ -100,6 +100,56 @@ def list_relations(session: Session, version_id: int) -> list[GraphRelation]:
     return list(session.scalars(statement))
 
 
+def get_relation(
+    session: Session, version_id: int, relation_id: int
+) -> GraphRelation | None:
+    """按版本与主键读取关系；他版本的关系等价于不存在。"""
+    statement = select(GraphRelation).where(
+        GraphRelation.version_id == version_id, GraphRelation.id == relation_id
+    )
+    return session.scalars(statement).first()
+
+
+def find_relation(
+    session: Session,
+    version_id: int,
+    *,
+    source_concept_id: int,
+    target_concept_id: int,
+    necessity: str,
+) -> GraphRelation | None:
+    """同版本内同向同必要性的关系；用于重复边预检。"""
+    statement = select(GraphRelation).where(
+        GraphRelation.version_id == version_id,
+        GraphRelation.source_concept_id == source_concept_id,
+        GraphRelation.target_concept_id == target_concept_id,
+        GraphRelation.necessity == necessity,
+    )
+    return session.scalars(statement).first()
+
+
+def list_relations_by_ids(
+    session: Session, version_id: int, relation_ids: Sequence[int]
+) -> list[GraphRelation]:
+    """只返回属于该版本的关系；调用方据缺失集合判定整批失败。"""
+    if not relation_ids:
+        return []
+    statement = (
+        select(GraphRelation)
+        .where(
+            GraphRelation.version_id == version_id,
+            GraphRelation.id.in_(relation_ids),
+        )
+        .order_by(GraphRelation.id)
+    )
+    return list(session.scalars(statement))
+
+
+def delete_relation(session: Session, relation: GraphRelation) -> None:
+    session.delete(relation)
+    session.flush()
+
+
 def review_counts(session: Session, version_id: int) -> dict[str, int]:
     counts = {"APPROVED": 0, "REJECTED": 0, "PENDING": 0}
     statement = (
