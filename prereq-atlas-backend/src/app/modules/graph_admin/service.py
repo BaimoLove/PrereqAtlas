@@ -22,6 +22,8 @@ from app.common.contracts import (
     Necessity,
     ReviewStatus,
     Role,
+    VersionData,
+    VersionEdge,
     parse_id,
 )
 from app.common.http_contracts import (
@@ -44,6 +46,9 @@ from app.common.http_contracts import (
     RelationMutationResponse,
     RelationUpdateRequest,
     RevisionResponse,
+    ValidateDraftRequest,
+    ValidationIssue,
+    ValidationReport,
     VersionListResponse,
     VersionSummary,
 )
@@ -53,11 +58,16 @@ from app.modules.catalog import public as catalog
 from app.modules.catalog.public import ConceptContent, DraftWriteContext
 from app.modules.graph_admin import repository
 from app.modules.graph_admin.models import GraphRelation, GraphVersion
+from app.modules.graph_runtime import public as graph_runtime
 from app.modules.ingestion import public as ingestion
 
 CREATE_DRAFT_ACTION = "CREATE_DRAFT"
 IMPORT_ACTION = "IMPORT"
 RELATION_ACTION = "EDIT_RELATION"
+VALIDATE_ACTION = "VALIDATE_DRAFT"
+PENDING_RELATIONS = "PENDING_RELATIONS"
+REJECTED_RELATIONS = "REJECTED_RELATIONS"
+CHAPTER_MISSING = "CHAPTER_MISSING"
 DIRECT_EDGE = "direct"
 TRANSITIVE_EDGE = "transitive"
 
@@ -948,3 +958,148 @@ def update_relation(
     return RelationMutationResponse(
         relation=_admin_relation(relation), new_revision=new_revision
     )
+
+
+def _version_data(
+    session: Session, version: GraphVersion, relations: Sequence[GraphRelation]
+) -> VersionData:
+    """把本草稿的章节/概念/关系读成构图输入；不读取当前生效版本。"""
+    return VersionData(
+        version_id=version.id,
+        content_hash=version.content_hash,
+        chapters=tuple(catalog.read_version_chapters(session, version.id)),
+        nodes=tuple(catalog.read_version_nodes(session, version.id)),
+        edges=tuple(
+            VersionEdge(
+                relation_id=relation.id,
+                source_id=relation.source_concept_id,
+                target_id=relation.target_concept_id,
+                necessity=Necessity(relation.necessity),
+                review_status=ReviewStatus(relation.review_status),
+                structural_type=_structural_type(relation.structural_type),
+                review_basis=relation.rationale,
+            )
+            for relation in relations
+        ),
+    )
+
+
+def _chapter_issues(data: VersionData) -> list[ValidationIssue]:
+    """概念只能引用本版本内已存在的章节；缺失章节逐条定位到概念。"""
+    chapter_codes = {chapter.chapter_code for chapter in data.chapters}
+    missing = [
+        str(node.concept_id)
+        for node in data.nodes
+        if node.chapter_code is not None and node.chapter_code not in chapter_codes
+    ]
+    if not missing:
+        return []
+    return [
+        ValidationIssue(
+            code=CHAPTER_MISSING,
+            concept_ids=missing,
+            relation_ids=[],
+            message="概念引用了本草稿中不存在的章节",
+        )
+    ]
+
+
+def validate_draft(
+    session: Session,
+    draft_id: str,
+    *,
+    actor: Actor,
+    request: ValidateDraftRequest,
+) -> ValidationReport:
+    """核对引用、唯一性、自环、DAG 与审核完备性；通过时保存当前 revision。
+
+    校验只读：失败时一行不写、revision 不变、不留校验记录；成功只写
+    ``validated_revision`` 与一条审计，不修改任何内容或审核结论。
+    """
+    _require_admin(actor)
+    version_id = parse_id(draft_id)
+    version = _lock_writable_draft(session, version_id, request.expected_revision)
+    relations = repository.list_relations(session, version_id)
+    data = _version_data(session, version, relations)
+
+    issues: list[ValidationIssue] = []
+    cycle_paths: list[list[str]] = []
+    try:
+        graph_runtime.build_snapshot(data)
+    except graph_runtime.GraphDataError as error:
+        for problem in error.issues:
+            issues.append(
+                ValidationIssue(
+                    code=problem.code,
+                    concept_ids=[str(item) for item in problem.concept_ids],
+                    relation_ids=[str(item) for item in problem.relation_ids],
+                    message=problem.message,
+                )
+            )
+            if problem.cycle_path is not None:
+                cycle_paths.append([str(item) for item in problem.cycle_path])
+    issues.extend(_chapter_issues(data))
+
+    pending = [
+        relation
+        for relation in relations
+        if relation.review_status == ReviewStatus.PENDING.value
+    ]
+    rejected = [
+        relation
+        for relation in relations
+        if relation.review_status == ReviewStatus.REJECTED.value
+    ]
+    if pending:
+        issues.append(
+            ValidationIssue(
+                code=PENDING_RELATIONS,
+                concept_ids=[],
+                relation_ids=[str(relation.id) for relation in pending],
+                message=f"{len(pending)} 条关系尚未审核",
+            )
+        )
+    if rejected:
+        issues.append(
+            ValidationIssue(
+                code=REJECTED_RELATIONS,
+                concept_ids=[],
+                relation_ids=[str(relation.id) for relation in rejected],
+                message=f"{len(rejected)} 条关系已被拒绝，不能进入发布版本",
+            )
+        )
+
+    counts = repository.review_counts(session, version_id)
+    report = ValidationReport(
+        draft_id=str(version_id),
+        revision=version.draft_revision,
+        valid=not issues,
+        issues=issues,
+        approved_count=counts["APPROVED"],
+        rejected_count=counts["REJECTED"],
+        pending_count=counts["PENDING"],
+        cycle_paths=cycle_paths,
+    )
+    if issues:
+        raise AppError(
+            ErrorCode.VALIDATION_ERROR,
+            "草稿校验未通过",
+            {
+                "resource_type": "graph_version",
+                "ids": [str(version_id)],
+                "report": report.model_dump(mode="json"),
+            },
+        )
+
+    version.validated_revision = version.draft_revision
+    repository.add_audit(
+        session,
+        version_id=version.id,
+        operator_id=actor.user_id,
+        action=VALIDATE_ACTION,
+        revision_before=version.draft_revision,
+        revision_after=version.draft_revision,
+        summary=f"校验通过：概念 {len(data.nodes)}、审核通过关系 {counts['APPROVED']}",
+    )
+    session.commit()
+    return report

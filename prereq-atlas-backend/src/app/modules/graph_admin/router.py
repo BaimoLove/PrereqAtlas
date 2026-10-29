@@ -20,6 +20,8 @@ from app.common.http_contracts import (
     RelationMutationResponse,
     RelationUpdateRequest,
     RevisionResponse,
+    ValidateDraftRequest,
+    ValidationReport,
     VersionListQuery,
     VersionListResponse,
 )
@@ -72,6 +74,20 @@ def accept_import(
 ) -> AcceptImportResponse:
     """接收一个 STAGED 批次：写入章节/概念与 PENDING 候选关系，并把批次置为 CONSUMED。"""
     return service.accept_import(session, draft_id, actor=actor, request=request)
+
+
+@router.post(
+    "/admin/graph/drafts/{draft_id}/validate",
+    summary="校验草稿并记录可发布 revision",
+)
+def validate_draft(
+    draft_id: IdStr,
+    request: ValidateDraftRequest,
+    actor: Annotated[Actor, Depends(require_admin)],
+    session: Annotated[Session, Depends(get_session, scope="function")],
+) -> ValidationReport:
+    """核对引用、DAG 与审核完备性；未通过时返回 422 与定位报告，不写入任何结论。"""
+    return service.validate_draft(session, draft_id, actor=actor, request=request)
 
 
 @router.post(

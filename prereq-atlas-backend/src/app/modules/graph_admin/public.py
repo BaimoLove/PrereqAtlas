@@ -10,6 +10,7 @@ from app.modules.graph_admin.service import (
     get_draft,
     list_versions,
     update_relation,
+    validate_draft,
 )
 
 __all__ = [
@@ -22,4 +23,5 @@ __all__ = [
     "get_draft",
     "list_versions",
     "update_relation",
+    "validate_draft",
 ]
