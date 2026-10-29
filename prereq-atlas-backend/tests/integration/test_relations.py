@@ -8,7 +8,6 @@ RECOMMENDED/OPTIONAL 拒绝、重复/自环/无效端点与审计准确性。
 from __future__ import annotations
 
 from collections.abc import Iterator
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient

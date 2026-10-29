@@ -103,7 +103,8 @@ def _seed_published(engine: Engine, *, label: str = "v1.0") -> tuple[int, int, i
         connection.execute(
             text(
                 "INSERT INTO chapter_revision (version_id, chapter_code, name, display_order) "
-                "VALUES (:version_id, 'M01', '数据挖掘概述', 1), (:version_id, 'M02', '关联规则', 2)"
+                "VALUES (:version_id, 'M01', '数据挖掘概述', 1), "
+                "(:version_id, 'M02', '关联规则', 2)"
             ),
             {"version_id": version_id},
         )
@@ -111,10 +112,15 @@ def _seed_published(engine: Engine, *, label: str = "v1.0") -> tuple[int, int, i
             text(
                 "INSERT INTO concept_revision (version_id, concept_id, chapter_code, label_zh, "
                 "label_en, node_type, introduction, learning_focus) VALUES "
-                "(:version_id, :alpha, 'M01', 'Apriori 算法', 'Apriori', '算法', '频繁项集挖掘', NULL), "
+                "(:version_id, :alpha, 'M01', 'Apriori 算法', 'Apriori', '算法', "
+                "'频繁项集挖掘', NULL), "
                 "(:version_id, :beta, 'M02', 'K 近邻', NULL, '方法', NULL, '距离度量')"
             ),
-            {"version_id": version_id, "alpha": alpha, "beta": beta},
+            {
+                "version_id": version_id,
+                "alpha": alpha,
+                "beta": beta,
+            },
         )
         connection.execute(
             text(
@@ -384,7 +390,7 @@ def test_version_list_filters_orders_and_draft_detail_not_found(drafts_client):
 
 def test_only_admin_may_read_or_create_drafts(drafts_client):
     """T10-04：学生读取列表与创建草稿均 403，不产生任何写入。"""
-    client, engine, headers = drafts_client
+    client, engine, _headers = drafts_client
     registered = client.post("/api/v1/auth/register", json=STUDENT)
     assert registered.status_code == 201
     login = client.post("/api/v1/auth/token", data=STUDENT)
@@ -459,4 +465,9 @@ def test_production_gate_rejects_published_and_stale_revision(drafts_client):
     }
     assert stale.value.code is ErrorCode.CONFLICT
     assert stale.value.details == {"expected_revision": 5, "actual_revision": 0}
-    assert _count(engine, "SELECT COUNT(*) FROM chapter_revision WHERE version_id = :id", id=draft_id) == 0
+    assert (
+        _count(
+            engine, "SELECT COUNT(*) FROM chapter_revision WHERE version_id = :id", id=draft_id
+        )
+        == 0
+    )

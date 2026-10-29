@@ -89,8 +89,12 @@ def _seed_source_content(engine: Engine, factory: sessionmaker[Session], version
     """在草稿态写入两章两概念两资料，返回其中一个概念 ID。"""
     with factory() as session:
         context = _context(version_id)
-        catalog.write_chapter(session, context, chapter_code="M01", name="数据挖掘概述", display_order=1)
-        catalog.write_chapter(session, context, chapter_code="M02", name="关联规则", display_order=2)
+        catalog.write_chapter(
+            session, context, chapter_code="M01", name="数据挖掘概述", display_order=1
+        )
+        catalog.write_chapter(
+            session, context, chapter_code="M02", name="关联规则", display_order=2
+        )
         apriori = catalog.ensure_concept(
             session,
             context,
@@ -215,7 +219,9 @@ def test_chapter_concept_resource_round_trip(catalog_env):
         catalog.write_chapter(
             session, context, chapter_code="M01", name="  数据挖掘概述  ", display_order=2
         )
-        catalog.write_chapter(session, context, chapter_code="M02", name="关联规则", display_order=1)
+        catalog.write_chapter(
+            session, context, chapter_code="M02", name="关联规则", display_order=1
+        )
         concept_id = catalog.ensure_concept(
             session,
             context,
@@ -286,7 +292,9 @@ def test_cross_version_chapter_reference_is_rejected_without_writes(catalog_env)
     source_version = _create_version(engine, label="v-chapter-src")
     target_version = _create_version(engine, label="v-chapter-dst")
     with factory() as session:
-        catalog.write_chapter(session, _context(source_version), chapter_code="M01", name="来源章节")
+        catalog.write_chapter(
+            session, _context(source_version), chapter_code="M01", name="来源章节"
+        )
         concept_id = catalog.ensure_concept(
             session,
             _context(target_version),
