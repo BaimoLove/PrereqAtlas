@@ -338,12 +338,14 @@ def test_resource_url_accepts_only_http_and_https() -> None:
 def test_query_models_validate_pagination_and_search() -> None:
     query = ConceptSearchQuery(version_id="1")
     assert (query.page, query.page_size, query.q, query.chapter) == (1, 20, None, None)
+    assert ConceptSearchQuery().version_id is None
     ConceptSearchQuery(version_id="1", q="x" * 100, chapter="M01")
     for kwargs in ({"page": 0}, {"page_size": 0}, {"page_size": 101}, {"q": "x" * 101}):
         with pytest.raises(ValidationError):
             ConceptSearchQuery(version_id="1", **kwargs)
+    assert ConceptDetailQuery().version_id is None
     with pytest.raises(ValidationError):
-        ConceptDetailQuery()
+        ConceptDetailQuery(version_id="0")
     assert PageQuery().page == 1
     assert VersionListQuery(state="DRAFT").state is not None
     with pytest.raises(ValidationError):

@@ -400,13 +400,17 @@ class PageQuery(RequestModel):
 
 
 class ConceptSearchQuery(PageQuery):
-    version_id: IdStr
+    """概念分页查询；省略 version_id 时由应用依赖固定当前生效发布版。"""
+
+    version_id: IdStr | None = None
     q: SearchTerm | None = None
     chapter: ChapterCode | None = None
 
 
 class ConceptDetailQuery(RequestModel):
-    version_id: IdStr
+    """知识卡查询；省略 version_id 时同样固定当前生效发布版。"""
+
+    version_id: IdStr | None = None
 
 
 class VersionListQuery(PageQuery):
