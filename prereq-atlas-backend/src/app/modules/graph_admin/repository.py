@@ -9,7 +9,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.modules.graph_admin.models import ActiveGraph, GraphAudit, GraphRelation, GraphVersion
@@ -235,3 +235,15 @@ def add_audit(
     session.add(audit)
     session.flush()
     return audit
+
+
+def advance_active_graph(
+    session: Session, *, expected_revision: int, version_id: int, operator_id: int,
+) -> bool:
+    """锁定已有单例后仍用 revision 条件更新，首插另由单例唯一键保护。"""
+    result = session.connection().execute(
+        update(ActiveGraph)
+        .where(ActiveGraph.singleton_id == 1, ActiveGraph.revision == expected_revision)
+        .values(version_id=version_id, revision=expected_revision + 1, updated_by=operator_id)
+    )
+    return result.rowcount == 1

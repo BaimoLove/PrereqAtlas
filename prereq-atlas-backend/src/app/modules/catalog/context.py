@@ -13,7 +13,7 @@ from typing import Protocol
 
 from sqlalchemy.orm import Session
 
-from app.common.contracts import VersionResource
+from app.common.contracts import VersionData, VersionResource
 
 
 class DraftStateGate(Protocol):
@@ -85,3 +85,22 @@ class VersionResourceLink:
 
     concept_id: int
     resource: VersionResource
+
+
+class PublishedReadContext(Protocol):
+    """查询路由仅依赖注入的固定版只读属性，不选择当前版本。"""
+
+    @property
+    def version_id(self) -> int: ...
+
+    @property
+    def label(self) -> str: ...
+
+    @property
+    def content_hash(self) -> str: ...
+
+    @property
+    def active_revision(self) -> int | None: ...
+
+    @property
+    def data(self) -> VersionData: ...

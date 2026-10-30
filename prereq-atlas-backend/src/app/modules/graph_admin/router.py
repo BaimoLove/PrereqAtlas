@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import get_session, require_admin
+from app.api.dependencies import get_session, get_snapshot_cache, require_admin
 from app.common.contracts import Actor, IdStr
 from app.common.http_contracts import (
     AcceptImportRequest,
@@ -14,6 +14,8 @@ from app.common.http_contracts import (
     CreateDraftRequest,
     DraftCreateResponse,
     DraftDetail,
+    PublishDraftRequest,
+    PublishResponse,
     RelationBatchReviewRequest,
     RelationCreateRequest,
     RelationDeleteRequest,
@@ -26,6 +28,8 @@ from app.common.http_contracts import (
     VersionListResponse,
 )
 from app.modules.graph_admin import service
+from app.modules.graph_admin.publication import publish_draft as publish
+from app.modules.graph_runtime.public import SnapshotCache
 
 router = APIRouter(tags=["graph_admin"])
 
@@ -149,3 +153,14 @@ def delete_relation(
     return service.delete_relation(
         session, draft_id, relation_id, actor=actor, request=request
     )
+
+
+@router.post("/admin/graph/drafts/{draft_id}/publish", summary="原子发布当前草稿")
+def publish_draft(
+    draft_id: IdStr,
+    request: PublishDraftRequest,
+    actor: Annotated[Actor, Depends(require_admin)],
+    session: Annotated[Session, Depends(get_session, scope="function")],
+    cache: Annotated[SnapshotCache, Depends(get_snapshot_cache)],
+) -> PublishResponse:
+    return publish(session, draft_id, actor=actor, request=request, cache=cache)

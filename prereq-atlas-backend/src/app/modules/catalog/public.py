@@ -12,6 +12,7 @@ from app.modules.catalog.context import (
     DraftWriteContext,
     VersionResourceLink,
 )
+from app.modules.catalog.queries import concept_card, query_graph, search_concepts
 from app.modules.catalog.service import (
     add_resource,
     copy_content,
@@ -33,12 +34,15 @@ __all__ = [
     "DraftWriteContext",
     "VersionResourceLink",
     "add_resource",
+    "concept_card",
     "copy_content",
     "ensure_concept",
     "find_concept_identity",
+    "query_graph",
     "read_version_chapters",
     "read_version_nodes",
     "read_version_resources",
+    "search_concepts",
     "version_has_concept",
     "write_chapter",
     "write_concept_content",

@@ -1,4 +1,4 @@
-"""GET /health/ready 的契约：数据库可用性只在这里对外暴露。"""
+"""GET /health/ready 的契约：数据库及生效图谱共同决定就绪状态。"""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from app.main import create_app
 pytestmark = pytest.mark.integration
 
 
-def test_ready_reports_ok_when_database_reachable(test_engine: Engine) -> None:
+def test_ready_reports_503_when_database_reachable_but_no_graph(test_engine: Engine) -> None:
     app = create_app()
     app.dependency_overrides[get_engine] = lambda: test_engine
     try:
@@ -21,10 +21,8 @@ def test_ready_reports_ok_when_database_reachable(test_engine: Engine) -> None:
     finally:
         app.dependency_overrides.clear()
 
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["status"] == "ready"
-    assert payload["database"] == "ok"
+    assert response.status_code == 503
+    assert response.json()["code"] == "SERVICE_UNAVAILABLE"
 
 
 def test_ready_reports_503_when_database_unreachable() -> None:
